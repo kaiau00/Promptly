@@ -9,15 +9,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastResultItem: NSMenuItem?
     private var resetStatusWorkItem: DispatchWorkItem?
     private let settings = SettingsWindowController()
-    private var cachedAPIKey: String?
+    private var cachedAPIKeys: [AIProvider: String] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         hotKey = GlobalHotKey { [weak self] in
             self?.scanCurrentScreen()
         }
-        settings.onAPIKeySaved = { [weak self] key in
-            self?.cachedAPIKey = key
+        settings.onAPIKeySaved = { [weak self] provider, key in
+            self?.cachedAPIKeys[provider] = key
         }
         NotificationCenter.default.addObserver(self, selector: #selector(shortcutDidChange), name: ShortcutStore.shortcutDidChange, object: nil)
         setIdleStatus(detail: "Ready — press \(ShortcutStore.current().display) to scan visible text.")
@@ -41,12 +41,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.setTransientStatus(title: "!", detail: "No text found. Keep the question visible and try again.")
                     return
                 }
-                guard let apiKey = try self.apiKeyForCurrentSession() else {
-                    self.setTransientStatus(title: "!", detail: "Add your MiniMax API key from Settings, then scan again.")
+                let provider = ProviderStore.current
+                guard let apiKey = try self.apiKeyForCurrentSession(for: provider) else {
+                    self.setTransientStatus(title: "!", detail: "Add your \(provider.displayName) API key from Settings, then scan again.")
                     return
                 }
-                self.setTransientStatus(title: "…", detail: "Analyzing recognized text with MiniMax…")
-                let answer = try await MinimaxClient.analyze(recognizedText: text, apiKey: apiKey)
+                self.setTransientStatus(title: "…", detail: "Analyzing recognized text with \(provider.displayName)…")
+                let answer = try await AIClient.analyze(recognizedText: text, provider: provider, apiKey: apiKey)
                 self.setTransientStatus(title: Self.answerLetter(from: answer), detail: answer)
             } catch {
                 self.setTransientStatus(title: "!", detail: "Could not complete the scan: \(error.localizedDescription)")
@@ -108,10 +109,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return CGRequestScreenCaptureAccess()
     }
 
-    private func apiKeyForCurrentSession() throws -> String? {
-        if let cachedAPIKey { return cachedAPIKey }
-        let key = try KeychainStore.loadAPIKey()
-        cachedAPIKey = key
+    private func apiKeyForCurrentSession(for provider: AIProvider) throws -> String? {
+        if let cachedKey = cachedAPIKeys[provider] { return cachedKey }
+        let key = try KeychainStore.loadAPIKey(for: provider)
+        cachedAPIKeys[provider] = key
         return key
     }
 

@@ -12,7 +12,7 @@ For the simplest setup, download the latest `Promptly.zip` from **Releases**, un
 - Starts with **Control–Shift–|** (the physical backslash key on a US keyboard); change it from Settings to any shortcut with a modifier key.
 - Captures the main display only after that shortcut is pressed.
 - Uses Apple's on-device Vision OCR to read visible text.
-- Sends the recognized text to MiniMax M3 when you have supplied a key in Settings.
+- Sends recognized text to the selected provider when you have supplied its key in Settings: MiniMax M3, OpenAI GPT-5 mini, or Anthropic Claude Haiku 5.5.
 - Replaces its visible menu-bar viewfinder icon with the returned answer letter for 5 seconds; click the item to see the concise explanation in its normal menu.
 
 It deliberately does not hide its behavior, suppress macOS privacy indicators, or attempt to defeat site or proctoring controls. The API key is stored in your macOS Keychain; it is not written to source files, configuration files, or the app bundle.
@@ -33,12 +33,13 @@ At first capture, allow **Screen Recording** in macOS System Settings when asked
 
 The script installs an ad-hoc signed copy in `~/Applications/Promptly.app`. If you rebuild it, macOS may ask you to approve Screen Recording again. To use a different install location, set `PROMPTLY_INSTALL_DIR` before running the script. Developers with an Apple code-signing identity can use it by setting `PROMPTLY_SIGNING_IDENTITY`.
 
-## Configure MiniMax
+## Configure an AI provider
 
 1. Launch `Promptly.app`.
 2. Select the viewfinder icon in the menu bar and choose **Settings**.
-3. Paste your MiniMax API key and select **Save securely**. Settings displays **MiniMax key: Set** when one is stored and offers **Replace key…** without exposing the existing value.
+3. Choose **MiniMax**, **OpenAI**, or **Anthropic**.
+4. Paste an API key for that provider and select **Save securely**. Settings reports whether a key is set and offers **Replace key…** without exposing it. Each provider’s key is stored separately in Keychain.
 
-The app uses MiniMax's OpenAI-compatible `chat/completions` endpoint with the `MiniMax-M3` model. Only text recognized from the scan is sent to MiniMax; screenshots are not uploaded.
+Only text recognized from the scan is sent to the selected provider; screenshots are not uploaded. The app uses MiniMax’s and OpenAI’s Chat Completions APIs and Anthropic’s Messages API.
 
 The API key is read from Keychain once per app launch and retained only in memory for the active session, so scans do not repeatedly prompt for Keychain access.

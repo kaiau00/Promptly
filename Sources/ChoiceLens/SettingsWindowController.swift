@@ -2,8 +2,12 @@ import AppKit
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
-    var onAPIKeySaved: ((String) -> Void)?
+    var onAPIKeySaved: ((AIProvider, String) -> Void)?
+
+    private let providerPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let apiKeyTitle = NSTextField(labelWithString: "")
     private let apiKeyField = NSSecureTextField()
+    private let detail = NSTextField(wrappingLabelWithString: "")
     private let statusLabel = NSTextField(labelWithString: "")
     private let saveButton = NSButton(title: "Save securely", target: nil, action: nil)
     private let replaceButton = NSButton(title: "Replace key…", target: nil, action: nil)
@@ -12,9 +16,11 @@ final class SettingsWindowController: NSWindowController {
     private var shortcutMonitor: Any?
     private var hasSavedKey = false
 
+    private var provider: AIProvider { ProviderStore.current }
+
     init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 335),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 400),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -26,16 +32,25 @@ final class SettingsWindowController: NSWindowController {
         let content = NSView()
         window.contentView = content
 
-        let title = NSTextField(labelWithString: "MiniMax API key")
-        title.font = .systemFont(ofSize: 15, weight: .semibold)
-        title.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(title)
+        let providerTitle = NSTextField(labelWithString: "AI provider")
+        providerTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        providerTitle.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(providerTitle)
 
-        apiKeyField.placeholderString = "Paste an API key"
+        providerPopup.addItems(withTitles: AIProvider.allCases.map(\.displayName))
+        providerPopup.selectItem(withTitle: provider.displayName)
+        providerPopup.target = self
+        providerPopup.action = #selector(providerDidChange)
+        providerPopup.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(providerPopup)
+
+        apiKeyTitle.font = .systemFont(ofSize: 15, weight: .semibold)
+        apiKeyTitle.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(apiKeyTitle)
+
         apiKeyField.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(apiKeyField)
 
-        let detail = NSTextField(wrappingLabelWithString: "The key is saved only in your macOS Keychain. Each scan sends recognized text—not a screenshot—to MiniMax for analysis.")
         detail.textColor = .secondaryLabelColor
         detail.font = .systemFont(ofSize: 12)
         detail.maximumNumberOfLines = 3
@@ -82,44 +97,55 @@ final class SettingsWindowController: NSWindowController {
         content.addSubview(shortcutHelp)
 
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            title.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            title.topAnchor.constraint(equalTo: content.topAnchor, constant: 25),
-            apiKeyField.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            apiKeyField.trailingAnchor.constraint(equalTo: title.trailingAnchor),
-            apiKeyField.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 10),
-            detail.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            detail.trailingAnchor.constraint(equalTo: title.trailingAnchor),
+            providerTitle.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            providerTitle.topAnchor.constraint(equalTo: content.topAnchor, constant: 25),
+            providerPopup.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
+            providerPopup.topAnchor.constraint(equalTo: providerTitle.bottomAnchor, constant: 8),
+            apiKeyTitle.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
+            apiKeyTitle.topAnchor.constraint(equalTo: providerPopup.bottomAnchor, constant: 22),
+            apiKeyField.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
+            apiKeyField.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
+            apiKeyField.topAnchor.constraint(equalTo: apiKeyTitle.bottomAnchor, constant: 10),
+            detail.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
+            detail.trailingAnchor.constraint(equalTo: apiKeyField.trailingAnchor),
             detail.topAnchor.constraint(equalTo: apiKeyField.bottomAnchor, constant: 12),
-            saveButton.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+            saveButton.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
             saveButton.topAnchor.constraint(equalTo: detail.bottomAnchor, constant: 17),
-            replaceButton.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+            replaceButton.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
             replaceButton.topAnchor.constraint(equalTo: detail.bottomAnchor, constant: 17),
             statusLabel.leadingAnchor.constraint(equalTo: saveButton.trailingAnchor, constant: 12),
             statusLabel.centerYAnchor.constraint(equalTo: saveButton.centerYAnchor),
-            shortcutTitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+            shortcutTitle.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
             shortcutTitle.topAnchor.constraint(equalTo: saveButton.bottomAnchor, constant: 31),
             shortcutValueLabel.leadingAnchor.constraint(equalTo: shortcutTitle.leadingAnchor),
             shortcutValueLabel.topAnchor.constraint(equalTo: shortcutTitle.bottomAnchor, constant: 10),
             changeShortcutButton.leadingAnchor.constraint(equalTo: shortcutValueLabel.trailingAnchor, constant: 14),
             changeShortcutButton.centerYAnchor.constraint(equalTo: shortcutValueLabel.centerYAnchor),
-            shortcutHelp.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-            shortcutHelp.trailingAnchor.constraint(equalTo: title.trailingAnchor),
+            shortcutHelp.leadingAnchor.constraint(equalTo: providerTitle.leadingAnchor),
+            shortcutHelp.trailingAnchor.constraint(equalTo: apiKeyField.trailingAnchor),
             shortcutHelp.topAnchor.constraint(equalTo: shortcutValueLabel.bottomAnchor, constant: 11)
         ])
 
-        hasSavedKey = (try? KeychainStore.loadAPIKey()) != nil
-        updateKeyState()
+        refreshKeyState()
     }
 
     required init?(coder: NSCoder) { nil }
 
     func present() {
-        hasSavedKey = (try? KeychainStore.loadAPIKey()) != nil
-        updateKeyState()
+        providerPopup.selectItem(withTitle: provider.displayName)
+        refreshKeyState()
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func providerDidChange() {
+        guard let selected = providerPopup.titleOfSelectedItem,
+              let provider = AIProvider.allCases.first(where: { $0.displayName == selected })
+        else { return }
+        ProviderStore.current = provider
+        apiKeyField.stringValue = ""
+        refreshKeyState()
     }
 
     @objc private func save() {
@@ -130,11 +156,11 @@ final class SettingsWindowController: NSWindowController {
             return
         }
         do {
-            try KeychainStore.saveAPIKey(key)
-            onAPIKeySaved?(key)
+            try KeychainStore.saveAPIKey(key, for: provider)
+            onAPIKeySaved?(provider, key)
             apiKeyField.stringValue = ""
             hasSavedKey = true
-            updateKeyState(message: "Replacement saved in Keychain")
+            updateKeyState(message: "Saved in Keychain")
         } catch {
             statusLabel.stringValue = error.localizedDescription
             statusLabel.textColor = .systemRed
@@ -148,17 +174,25 @@ final class SettingsWindowController: NSWindowController {
         window?.makeFirstResponder(apiKeyField)
     }
 
+    private func refreshKeyState() {
+        hasSavedKey = (try? KeychainStore.loadAPIKey(for: provider)) != nil
+        updateKeyState()
+    }
+
     private func updateKeyState(message: String? = nil) {
+        let providerName = provider.displayName
+        apiKeyTitle.stringValue = "\(providerName) API key"
+        detail.stringValue = "Promptly uses \(provider.defaultModel) with \(providerName). The key stays in your macOS Keychain. Each scan sends recognized text—not a screenshot—to the provider you select."
         apiKeyField.isHidden = hasSavedKey
         saveButton.isHidden = hasSavedKey
         replaceButton.isHidden = !hasSavedKey
 
         if hasSavedKey {
-            statusLabel.stringValue = message ?? "MiniMax key: Set"
+            statusLabel.stringValue = message ?? "\(providerName) key: Set"
             statusLabel.textColor = .systemGreen
         } else {
-            apiKeyField.placeholderString = "Paste a MiniMax API key"
-            statusLabel.stringValue = "MiniMax key: Not set"
+            apiKeyField.placeholderString = "Paste a \(providerName) API key"
+            statusLabel.stringValue = "\(providerName) key: Not set"
             statusLabel.textColor = .secondaryLabelColor
         }
         shortcutValueLabel.stringValue = ShortcutStore.current().display
