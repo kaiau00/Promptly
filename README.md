@@ -2,6 +2,10 @@
 
 Native macOS app for a personal, shortcut-driven screen-reading workflow. Use it only where AI assistance is explicitly allowed.
 
+## Quick start
+
+For the simplest setup, download the latest `Promptly.zip` from **Releases**, unzip it, and follow [GETTING_STARTED.md](GETTING_STARTED.md). You do not need Xcode or Terminal for the release download.
+
 ## What it does today
 
 - Runs as a menu-bar app, so it does not take focus from the active app.
