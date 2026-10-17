@@ -1,0 +1,160 @@
+import AppKit
+import CoreGraphics
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var hotKey: GlobalHotKey?
+    private var statusItem: NSStatusItem?
+    private var scanMenuItem: NSMenuItem?
+    private var lastResultItem: NSMenuItem?
+    private var resetStatusWorkItem: DispatchWorkItem?
+    private let settings = SettingsWindowController()
+    private var cachedAPIKey: String?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        configureStatusItem()
+        hotKey = GlobalHotKey { [weak self] in
+            self?.scanCurrentScreen()
+        }
+        settings.onAPIKeySaved = { [weak self] key in
+            self?.cachedAPIKey = key
+        }
+        NotificationCenter.default.addObserver(self, selector: #selector(shortcutDidChange), name: ShortcutStore.shortcutDidChange, object: nil)
+        setIdleStatus(detail: "Ready — press \(ShortcutStore.current().display) to scan visible text.")
+    }
+
+    private func scanCurrentScreen() {
+        guard CGPreflightScreenCaptureAccess() else {
+            let granted = requestScreenCaptureAccess()
+            let detail = granted
+                ? "Screen Recording is available. Press the shortcut again to scan."
+                : "Screen Recording is not granted to Promptly. Allow it in System Settings, then relaunch Promptly."
+            setTransientStatus(title: granted ? "✓" : "!", detail: detail)
+            return
+        }
+        setTransientStatus(title: "…", detail: "Reading visible text…")
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let text = try await ScreenReader.captureRecognizedText()
+                guard !text.isEmpty else {
+                    self.setTransientStatus(title: "!", detail: "No text found. Keep the question visible and try again.")
+                    return
+                }
+                guard let apiKey = try self.apiKeyForCurrentSession() else {
+                    self.setTransientStatus(title: "!", detail: "Add your MiniMax API key from Settings, then scan again.")
+                    return
+                }
+                self.setTransientStatus(title: "…", detail: "Analyzing recognized text with MiniMax…")
+                let answer = try await MinimaxClient.analyze(recognizedText: text, apiKey: apiKey)
+                self.setTransientStatus(title: Self.answerLetter(from: answer), detail: answer)
+            } catch {
+                self.setTransientStatus(title: "!", detail: "Could not complete the scan: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func configureStatusItem() {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+
+        let menu = NSMenu()
+        let scanItem = NSMenuItem(title: "", action: #selector(scanFromMenu), keyEquivalent: "")
+        menu.addItem(scanItem)
+        scanMenuItem = scanItem
+        updateShortcutMenuLabel()
+        menu.addItem(withTitle: "Check Screen Recording Permission", action: #selector(checkScreenRecordingPermission), keyEquivalent: "")
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        menu.addItem(.separator())
+        let lastResult = NSMenuItem(title: "Ready", action: nil, keyEquivalent: "")
+        lastResult.isEnabled = false
+        menu.addItem(lastResult)
+        lastResultItem = lastResult
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Promptly", action: #selector(quit), keyEquivalent: "q")
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func scanFromMenu() {
+        scanCurrentScreen()
+    }
+
+    @objc private func openSettings() {
+        settings.present()
+    }
+
+    @objc private func shortcutDidChange() {
+        updateShortcutMenuLabel()
+        setIdleStatus(detail: "Ready — press \(ShortcutStore.current().display) to scan visible text.")
+    }
+
+    @objc private func checkScreenRecordingPermission() {
+        if CGPreflightScreenCaptureAccess() {
+            setTransientStatus(title: "✓", detail: "Screen Recording permission is active for Promptly.")
+        } else {
+            let granted = requestScreenCaptureAccess()
+            setTransientStatus(
+                title: granted ? "✓" : "!",
+                detail: granted
+                    ? "Screen Recording is available."
+                    : "Allow Screen Recording for Promptly in System Settings, then quit and reopen the app."
+            )
+        }
+    }
+
+    private func requestScreenCaptureAccess() -> Bool {
+        // Privacy prompts are more reliable when the requester is the active app.
+        NSApp.activate(ignoringOtherApps: true)
+        return CGRequestScreenCaptureAccess()
+    }
+
+    private func apiKeyForCurrentSession() throws -> String? {
+        if let cachedAPIKey { return cachedAPIKey }
+        let key = try KeychainStore.loadAPIKey()
+        cachedAPIKey = key
+        return key
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
+    }
+
+    private func setIdleStatus(detail: String) {
+        resetStatusWorkItem?.cancel()
+        statusItem?.button?.title = ""
+        statusItem?.button?.image = NSImage(systemSymbolName: "viewfinder", accessibilityDescription: "Promptly")
+        statusItem?.button?.toolTip = detail
+        lastResultItem?.title = detail
+    }
+
+    private func setTransientStatus(title: String, detail: String) {
+        resetStatusWorkItem?.cancel()
+        statusItem?.button?.image = nil
+        statusItem?.button?.title = title
+        statusItem?.button?.toolTip = detail
+        lastResultItem?.title = detail
+
+        let work = DispatchWorkItem { [weak self] in
+            self?.setIdleStatus(detail: "Ready — press \(ShortcutStore.current().display) to scan visible text.")
+        }
+        resetStatusWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
+    }
+
+    private static func answerLetter(from response: String) -> String {
+        let uppercased = response.uppercased()
+        if uppercased.range(of: #"ANSWER\s*:\s*UNKNOWN"#, options: .regularExpression) != nil {
+            return "?"
+        }
+        let pattern = #"\b(?:ANSWER|OPTION|CHOICE)\s*(?:IS\s*)?[:\-]?\s*(?:OPTION\s*)?([A-F])\b"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: uppercased, range: NSRange(uppercased.startIndex..., in: uppercased)),
+              let range = Range(match.range(at: 1), in: uppercased)
+        else { return "?" }
+        return String(uppercased[range])
+    }
+
+    private func updateShortcutMenuLabel() {
+        scanMenuItem?.title = "Scan visible screen   \(ShortcutStore.current().display)"
+    }
+}
