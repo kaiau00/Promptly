@@ -31,7 +31,9 @@ Requirements: macOS 14 or later and Xcode Command Line Tools (`xcode-select --in
 
 At first capture, allow **Screen Recording** in macOS System Settings when asked. Promptly uses macOS’s registered global-hotkey API, so it does not require Input Monitoring.
 
-The script installs an ad-hoc signed copy in `~/Applications/Promptly.app`. If you rebuild it, macOS may ask you to approve Screen Recording again. To use a different install location, set `PROMPTLY_INSTALL_DIR` before running the script. Developers with an Apple code-signing identity can use it by setting `PROMPTLY_SIGNING_IDENTITY`.
+The script installs a signed copy in `~/Applications/Promptly.app`. macOS remembers Screen Recording and Keychain approvals by code signature, so the script signs every build with the same certificate, by default a self-signed one named **ChoiceLens Local Development**. Create it once in Keychain Access → Certificate Assistant → Create a Certificate… (Identity Type: Self-Signed Root, Certificate Type: Code Signing); the script stops with these instructions if it is missing. With a stable signature, you approve Screen Recording and Keychain access once instead of after every rebuild. Keep only one copy of the app installed: other copies with the same bundle identifier can reset its permissions.
+
+To use a different install location, set `PROMPTLY_INSTALL_DIR` before running the script. To sign with another identity, such as an Apple Developer ID, set `PROMPTLY_SIGNING_IDENTITY`; set it to `-` for an ad-hoc signature, which makes macOS re-prompt after every build.
 
 ## Configure an AI provider
 

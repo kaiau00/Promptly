@@ -26,6 +26,24 @@ enum KeychainStore {
         return key
     }
 
+    /// Checks for a saved key without reading the secret. Reading only item
+    /// attributes does not trigger a Keychain access prompt.
+    static func hasAPIKey(for provider: AIProvider) -> Bool {
+        let accounts = provider == .minimax
+            ? [account(for: provider), legacyMiniMaxAccount]
+            : [account(for: provider)]
+        return accounts.contains { account in
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecReturnAttributes as String: true,
+                kSecMatchLimit as String: kSecMatchLimitOne
+            ]
+            return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+        }
+    }
+
     static func saveAPIKey(_ key: String, for provider: AIProvider) throws {
         let account = account(for: provider)
         let query: [String: Any] = [

@@ -175,7 +175,7 @@ final class SettingsWindowController: NSWindowController {
     }
 
     private func refreshKeyState() {
-        hasSavedKey = (try? KeychainStore.loadAPIKey(for: provider)) != nil
+        hasSavedKey = KeychainStore.hasAPIKey(for: provider)
         updateKeyState()
     }
 

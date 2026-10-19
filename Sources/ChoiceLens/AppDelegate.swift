@@ -11,6 +11,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settings = SettingsWindowController()
     private var cachedAPIKeys: [AIProvider: String] = [:]
 
+    private static let requestedScreenCaptureKey = "didRequestScreenCaptureAccess"
+    private static let screenRecordingSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+    )!
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         configureStatusItem()
         hotKey = GlobalHotKey { [weak self] in
@@ -25,6 +30,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func scanCurrentScreen() {
         guard CGPreflightScreenCaptureAccess() else {
+            // Ask macOS only once. Later scans report the problem without
+            // re-prompting or pulling focus away from the frontmost app.
+            guard !hasRequestedScreenCapture else {
+                setTransientStatus(
+                    title: "!",
+                    detail: "Screen Recording is off for Promptly. Choose Check Screen Recording Permission to open System Settings."
+                )
+                return
+            }
             let granted = requestScreenCaptureAccess()
             let detail = granted
                 ? "Screen Recording is available. Press the shortcut again to scan."
@@ -92,6 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func checkScreenRecordingPermission() {
         if CGPreflightScreenCaptureAccess() {
             setTransientStatus(title: "✓", detail: "Screen Recording permission is active for Promptly.")
+        } else if hasRequestedScreenCapture {
+            // macOS shows its own prompt only once; send the user to the setting instead.
+            NSWorkspace.shared.open(Self.screenRecordingSettingsURL)
+            setTransientStatus(title: "!", detail: "Turn on Promptly under Screen & System Audio Recording, then quit and reopen the app.")
         } else {
             let granted = requestScreenCaptureAccess()
             setTransientStatus(
@@ -103,7 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private var hasRequestedScreenCapture: Bool {
+        UserDefaults.standard.bool(forKey: Self.requestedScreenCaptureKey)
+    }
+
     private func requestScreenCaptureAccess() -> Bool {
+        UserDefaults.standard.set(true, forKey: Self.requestedScreenCaptureKey)
         // Privacy prompts are more reliable when the requester is the active app.
         NSApp.activate(ignoringOtherApps: true)
         return CGRequestScreenCaptureAccess()
