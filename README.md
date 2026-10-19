@@ -13,7 +13,7 @@ For the simplest setup, download the latest `Promptly.zip` from **Releases**, un
 - Captures the main display only after that shortcut is pressed.
 - Uses Apple's on-device Vision OCR to read visible text.
 - Sends recognized text to the selected provider when you have supplied its key in Settings: MiniMax M3, OpenAI GPT-5 mini, or Anthropic Claude Haiku 5.5.
-- Replaces its visible menu-bar viewfinder icon with the returned answer letter for 5 seconds; click the item to see the concise explanation in its normal menu.
+- Replaces its visible menu-bar viewfinder icon with the text of the returned answer (shortened if long, `?` if the model is unsure) for 5 seconds; click the item to see the concise explanation in its normal menu.
 
 It deliberately does not hide its behavior, suppress macOS privacy indicators, or attempt to defeat site or proctoring controls. The API key is stored in your macOS Keychain; it is not written to source files, configuration files, or the app bundle.
 

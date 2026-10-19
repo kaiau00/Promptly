@@ -11,6 +11,11 @@ let package = Package(
         .executableTarget(
             name: "ChoiceLens",
             path: "Sources/ChoiceLens"
+        ),
+        .testTarget(
+            name: "ChoiceLensTests",
+            dependencies: ["ChoiceLens"],
+            path: "Tests/ChoiceLensTests"
         )
     ]
 )

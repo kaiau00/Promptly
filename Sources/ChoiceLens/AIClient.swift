@@ -2,7 +2,7 @@ import Foundation
 
 enum AIClient {
     private static let instructions = """
-    You are Promptly, a personal learning and practice helper. Analyze the multiple-choice question in the user-provided OCR text. If it is clear enough to answer, start with exactly `ANSWER: ` followed by the selected option letter, then give a concise reason of at most two sentences. If the text is incomplete, ambiguous, or is not a multiple-choice question, start with `ANSWER: UNKNOWN` and explain briefly. Do not claim certainty when the OCR is unclear.
+    You are Promptly, a personal learning and practice helper. Analyze the multiple-choice question in the user-provided OCR text. If it is clear enough to answer, start with exactly `ANSWER: ` followed by the text of the correct option as it appears on screen, without its letter or number label and without markdown, on one line. If that option is long, give only its first few words. On the next line, give a concise reason of at most two sentences. If the text is incomplete, ambiguous, or is not a multiple-choice question, start with `ANSWER: UNKNOWN` and explain briefly. Do not claim certainty when the OCR is unclear.
     """
 
     static func analyze(recognizedText: String, provider: AIProvider, apiKey: String) async throws -> String {

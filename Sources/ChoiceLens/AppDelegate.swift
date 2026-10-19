@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 self.setTransientStatus(title: "…", detail: "Analyzing recognized text with \(provider.displayName)…")
                 let answer = try await AIClient.analyze(recognizedText: text, provider: provider, apiKey: apiKey)
-                self.setTransientStatus(title: Self.answerLetter(from: answer), detail: answer)
+                self.setTransientStatus(title: AnswerParser.displayAnswer(from: answer), detail: answer)
             } catch {
                 self.setTransientStatus(title: "!", detail: "Could not complete the scan: \(error.localizedDescription)")
             }
@@ -163,19 +163,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         resetStatusWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
-    }
-
-    private static func answerLetter(from response: String) -> String {
-        let uppercased = response.uppercased()
-        if uppercased.range(of: #"ANSWER\s*:\s*UNKNOWN"#, options: .regularExpression) != nil {
-            return "?"
-        }
-        let pattern = #"\b(?:ANSWER|OPTION|CHOICE)\s*(?:IS\s*)?[:\-]?\s*(?:OPTION\s*)?([A-F])\b"#
-        guard let expression = try? NSRegularExpression(pattern: pattern),
-              let match = expression.firstMatch(in: uppercased, range: NSRange(uppercased.startIndex..., in: uppercased)),
-              let range = Range(match.range(at: 1), in: uppercased)
-        else { return "?" }
-        return String(uppercased[range])
     }
 
     private func updateShortcutMenuLabel() {
