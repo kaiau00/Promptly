@@ -39,6 +39,32 @@ struct AnswerParserTests {
         #expect(AnswerParser.displayAnswer(from: response) == "?")
     }
 
+    @Test(arguments: [
+        "ANSWER: Not a multiple-choice question",
+        "ANSWER: This is not multiple choice.",
+        "ANSWER: No clear answer",
+        "ANSWER: Cannot determine from the text",
+        "ANSWER: Can't tell",
+        "ANSWER: Unable to determine",
+        "ANSWER: Unclear",
+        "ANSWER: Not sure",
+        "ANSWER: Insufficient information",
+        "ANSWER: Ambiguous",
+        "ANSWER: No question visible",
+        "ANSWER: N/A",
+        "ANSWER: None",
+        "ANSWER: I don't know",
+        "**ANSWER:** *Unknown*"
+    ])
+    func returnsQuestionMarkWhenModelIsUnsure(response: String) {
+        #expect(AnswerParser.displayAnswer(from: response) == "?")
+    }
+
+    @Test(arguments: ["None of the above", "All of the above", "Not enough evidence", "Neither A nor B"])
+    func keepsRealOptionsThatSoundNegative(option: String) {
+        #expect(AnswerParser.displayAnswer(from: "ANSWER: \(option)") == option)
+    }
+
     @Test func truncatesLongAnswers() {
         let answer = AnswerParser.displayAnswer(from: "ANSWER: The quick brown fox jumps over the lazy dog")
         #expect(answer.count == AnswerParser.maxDisplayLength)

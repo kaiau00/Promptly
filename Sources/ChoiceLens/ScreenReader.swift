@@ -12,8 +12,10 @@ enum ScreenReader {
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let configuration = SCStreamConfiguration()
-        configuration.width = display.width
-        configuration.height = display.height
+        // SCDisplay reports points; capture in pixels so Retina text stays sharp for OCR.
+        let mode = CGDisplayCopyDisplayMode(display.displayID)
+        configuration.width = mode?.pixelWidth ?? display.width
+        configuration.height = mode?.pixelHeight ?? display.height
         configuration.showsCursor = false
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
         return try await recognizeText(in: image)
@@ -28,13 +30,15 @@ enum ScreenReader {
                 }
                 let results = request.results as? [VNRecognizedTextObservation] ?? []
                 let lines = results.compactMap { result in
-                    result.topCandidates(1).first?.string
+                    result.topCandidates(1).first.map { RecognizedLine(text: $0.string, box: result.boundingBox) }
                 }
-                continuation.resume(returning: lines.joined(separator: "\n"))
+                continuation.resume(returning: TextLayout.readingOrder(lines))
             }
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
-            request.minimumTextHeight = 0.012
+            // Fraction of the image height. Small enough to keep ~6pt text on a
+            // full-screen capture so compact answer options are not dropped.
+            request.minimumTextHeight = 0.006
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
                     try VNImageRequestHandler(cgImage: image).perform([request])

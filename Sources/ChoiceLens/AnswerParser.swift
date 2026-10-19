@@ -18,8 +18,21 @@ enum AnswerParser {
     private static let optionLabel = try! NSRegularExpression(
         pattern: #"^\(?[A-F](?:\)|\.|:|\s+-)\s+(?=\S)"#
     )
-    private static let wrappingCharacters = CharacterSet(charactersIn: "\"'\u{201C}\u{201D}\u{2018}\u{2019}")
+    private static let wrappingCharacters = CharacterSet(charactersIn: "\"'*_\u{201C}\u{201D}\u{2018}\u{2019}")
         .union(.whitespaces)
+
+    /// Whole answers that mean the model could not choose. Matched exactly, so
+    /// real options such as "None of the above" are kept.
+    private static let uncertainAnswers: Set<String> = [
+        "unknown", "none", "n/a", "na", "unsure", "unclear", "ambiguous", "no answer", "not sure"
+    ]
+    /// Openings of a sentence the model put on the ANSWER line instead of an option.
+    private static let uncertainPrefixes = [
+        "unknown", "not a multiple", "not multiple", "this is not", "this isn't", "no clear",
+        "no multiple", "no question", "no options", "cannot", "can not", "can't", "unable",
+        "unclear", "not sure", "insufficient", "ambiguous", "not enough info", "not enough context",
+        "not enough text", "i don't", "i do not", "i'm not", "i am not", "i can't", "i cannot"
+    ]
 
     static func displayAnswer(from response: String) -> String {
         let cleaned = removeMarkdown(from: remove(reasoningBlock, from: response))
@@ -30,8 +43,14 @@ enum AnswerParser {
         if answer.hasSuffix(".") { answer.removeLast() }
         answer = answer.trimmingCharacters(in: wrappingCharacters)
 
-        guard !answer.isEmpty, !answer.uppercased().hasPrefix("UNKNOWN") else { return unknown }
+        guard !answer.isEmpty, !isUncertain(answer) else { return unknown }
         return truncated(answer)
+    }
+
+    private static func isUncertain(_ answer: String) -> Bool {
+        let normalized = answer.lowercased().replacingOccurrences(of: "\u{2019}", with: "'")
+        return uncertainAnswers.contains(normalized)
+            || uncertainPrefixes.contains { normalized.hasPrefix($0) }
     }
 
     private static func removeMarkdown(from text: String) -> String {
